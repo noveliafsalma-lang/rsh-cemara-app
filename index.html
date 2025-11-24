@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSH Cemara Management System</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Config & Styles -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        cemara: { 50: '#f2fcf5', 100: '#e1f8e8', 500: '#22c55e', 700: '#15803d', 800: '#166534', 900: '#14532d' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        
+        /* Sticky Header */
+        .sticky-header { background: rgba(255,255,255,0.95); backdrop-filter: blur(5px); z-index: 40; border-bottom: 1px solid #e5e7eb; }
+        
+        /* Spreadsheet Input Styles */
+        .sheet-input { width: 100%; height: 100%; border: none; background: transparent; padding: 8px; outline: none; font-size: 0.875rem; }
+        .sheet-input:focus { background: #f0fdf4; box-shadow: inset 0 0 0 2px #16a34a; }
+        .sheet-readonly { background: #f9fafb; color: #6b7280; cursor: not-allowed; }
+        .sheet-table th { background-color: #f3f4f6; color: #374151; font-size: 0.75rem; text-transform: uppercase; padding: 10px; border: 1px solid #e5e7eb; font-weight: 700; }
+        .sheet-table td { border: 1px solid #e5e7eb; padding: 0; vertical-align: middle; height: 40px; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans">
+
+    <!-- LOGIN MODAL -->
+    <div id="modal-login" class="fixed inset-0 z-[60] bg-cemara-900 bg-opacity-95 flex items-center justify-center fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md text-center border-t-8 border-cemara-500">
+            <div class="mb-4 inline-block p-4 rounded-full bg-cemara-100 text-cemara-700"><i class="fa-solid fa-user-doctor text-4xl"></i></div>
+            <h2 class="text-2xl font-bold mb-2">Login Petugas</h2>
+            <p class="text-gray-500 mb-6 text-sm">Masukkan nama Anda untuk Audit Trail (Siapa yang memberi obat/verifikasi).</p>
+            <form onsubmit="handleLogin(event)">
+                <input type="text" id="loginName" class="w-full px-4 py-3 border rounded-xl text-center font-bold text-lg mb-4 focus:ring-2 focus:ring-cemara-500 outline-none" placeholder="Contoh: Drh. Budi / Paramedis Siti" required>
+                <button type="submit" class="w-full bg-cemara-700 text-white font-bold py-3 rounded-xl hover:bg-cemara-800 transition-all">Masuk Sistem</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- NAVBAR -->
+    <nav class="bg-white border-b h-16 flex-none z-50">
+        <div class="max-w-7xl mx-auto px-4 h-full flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="h-9 w-9 bg-cemara-700 rounded text-white flex items-center justify-center"><i class="fa-solid fa-hospital"></i></div>
+                <div><h1 class="font-bold text-lg text-cemara-900 leading-tight">RSH CEMARA</h1><p class="text-[10px] text-gray-500 font-medium">MANAGEMENT SYSTEM</p></div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="text-right hidden sm:block"><p class="text-xs text-gray-500">Petugas:</p><p id="displayUser" class="text-sm font-bold text-cemara-700">-</p></div>
+                <button onclick="logout()" class="p-2 text-gray-400 hover:text-red-500" title="Logout"><i class="fa-solid fa-power-off"></i></button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- CONTENT -->
+    <div class="flex-grow overflow-y-auto" id="main-container">
+        
+        <!-- VIEW 1: DASHBOARD -->
+        <div id="view-dashboard" class="max-w-7xl mx-auto p-6 fade-in space-y-6">
+            
+            <!-- Search & Register Bar -->
+            <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-paw text-cemara-600 mr-2"></i>Dashboard Pasien</h2>
+                    <div class="relative w-full md:w-96">
+                        <input type="text" id="searchPatient" onkeyup="renderPatientTable()" placeholder="Cari Pasien (Nama/RM)..." class="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-cemara-500 outline-none">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <!-- FORM REGISTRASI TOGGLE -->
+                <div class="border rounded-xl overflow-hidden">
+                    <button onclick="toggleRegForm()" class="w-full bg-gray-50 p-4 flex justify-between items-center hover:bg-gray-100 font-bold text-cemara-800">
+                        <span><i class="fa-solid fa-plus-circle mr-2"></i>Daftar Pasien Baru</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+                    
+                    <div id="form-reg-container" class="hidden p-6 bg-white">
+                        <form onsubmit="registerPatient(event)">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <!-- Data Pemilik -->
+                                <div class="space-y-3">
+                                    <h4 class="font-bold text-gray-500 border-b pb-2 text-sm uppercase">A. Data Pemilik</h4>
+                                    <div><label class="text-xs font-bold text-gray-600">Nama Lengkap</label><input type="text" id="regOwnerName" required class="w-full border rounded p-2"></div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div><label class="text-xs font-bold text-gray-600">No. HP/WA</label><input type="tel" id="regPhone" required class="w-full border rounded p-2"></div>
+                                        <div><label class="text-xs font-bold text-gray-600">Email</label><input type="email" id="regEmail" class="w-full border rounded p-2"></div>
+                                    </div>
+                                    <div><label class="text-xs font-bold text-gray-600">Alamat Rumah</label><textarea id="regAddress" class="w-full border rounded p-2" rows="2"></textarea></div>
+                                </div>
+                                <!-- Data Pasien -->
+                                <div class="space-y-3">
+                                    <h4 class="font-bold text-gray-500 border-b pb-2 text-sm uppercase">B. Data Pasien</h4>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div><label class="text-xs font-bold text-gray-600">Nama Hewan</label><input type="text" id="regPetName" required class="w-full border rounded p-2"></div>
+                                        <div>
+                                            <label class="text-xs font-bold text-gray-600">Spesies</label>
+                                            <select id="regSpecies" required class="w-full border rounded p-2 bg-white">
+                                                <option value="Anjing">Anjing</option><option value="Kucing">Kucing</option><option value="Kelinci">Kelinci</option><option value="Marmut">Marmut</option><option value="Burung">Burung</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div><label class="text-xs font-bold text-gray-600">Ras (Breed)</label><input type="text" id="regBreed" class="w-full border rounded p-2"></div>
+                                        <div><label class="text-xs font-bold text-gray-600">Warna</label><input type="text" id="regColor" class="w-full border rounded p-2"></div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <div><label class="text-xs font-bold text-gray-600">Kelamin</label><select id="regSex" class="w-full border rounded p-2 bg-white"><option>Jantan</option><option>Betina</option></select></div>
+                                        <div><label class="text-xs font-bold text-gray-600">Usia</label><input type="text" id="regAge" class="w-full border rounded p-2" placeholder="Thn/Bln"></div>
+                                        <div><label class="text-xs font-bold text-gray-600">Berat (kg)</label><input type="number" step="0.1" id="regWeight" required class="w-full border rounded p-2"></div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div><label class="text-xs font-bold text-gray-600">Vaksinasi</label><input type="text" id="regVaccine" class="w-full border rounded p-2" placeholder="Terakhir..."></div>
+                                        <div><label class="text-xs font-bold text-gray-600">Obat Cacing</label><input type="text" id="regDeworm" class="w-full border rounded p-2" placeholder="Terakhir..."></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-6 text-right">
+                                <button type="submit" class="bg-cemara-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-cemara-800 shadow">Simpan & Buka Medis</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Patient List -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <table class="w-full text-left">
+                    <thead class="bg-gray-50 border-b text-gray-600 text-xs uppercase">
+                        <tr>
+                            <th class="p-4">No. RM</th>
+                            <th class="p-4">Pasien</th>
+                            <th class="p-4">Pemilik</th>
+                            <th class="p-4">Status</th>
+                            <th class="p-4 text-right">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="patientTableBody" class="divide-y text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- VIEW 2: MEDICAL RECORD -->
+        <div id="view-medical" class="hidden bg-white min-h-full pb-20">
+            <!-- Sticky Header -->
+            <div class="sticky-header px-6 py-3">
+                <div class="max-w-7xl mx-auto flex justify-between items-start">
+                    <div class="flex items-center gap-4">
+                        <button onclick="showDashboard()" class="text-gray-400 hover:text-cemara-700"><i class="fa-solid fa-arrow-left text-xl"></i></button>
+                        <div class="h-12 w-12 bg-gray-200 rounded-full overflow-hidden border border-gray-300"><img src="https://placehold.co/100?text=Pet" class="w-full h-full object-cover"></div>
+                        <div>
+                            <h2 class="text-xl font-bold flex items-center gap-2">
+                                <span id="headName">Nama</span> 
+                                <span id="headSpecies" class="text-[10px] bg-gray-100 border px-1 rounded text-gray-500 uppercase">SPECIES</span>
+                            </h2>
+                            <div class="text-xs text-gray-500 flex gap-2">
+                                <span id="headRM" class="font-mono font-bold text-cemara-700">RM-000</span> | 
+                                <span id="headOwner">Pemilik</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right flex flex-col items-end">
+                        <div class="mb-1">
+                            <select id="patientStatusSelect" onchange="updatePatientStatus()" class="text-xs bg-white border border-gray-300 rounded p-1 font-bold text-cemara-800">
+                                <option value="Rawat Inap">🏥 Rawat Inap</option>
+                                <option value="Rawat Sehat">✨ Rawat Sehat</option>
+                                <option value="Telah Dipulangkan">🏠 Telah Dipulangkan</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <!-- Tabs -->
+                <div class="max-w-7xl mx-auto mt-4 flex border-b">
+                    <button onclick="switchTab('pomr')" id="tab-pomr" class="flex-1 py-2 text-sm font-bold border-b-2 border-cemara-600 text-cemara-700">POMR (Medical Record)</button>
+                    <button onclick="switchTab('maor')" id="tab-maor" class="flex-1 py-2 text-sm font-medium text-gray-500 hover:text-cemara-600">MAOR (Treatment Sheet)</button>
+                </div>
+            </div>
+
+            <div class="max-w-7xl mx-auto p-6">
+                
+                <!-- TAB 1: POMR -->
+                <div id="content-pomr" class="space-y-6 fade-in">
+                    
+                    <!-- CARD IDENTITAS LENGKAP -->
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-5 text-sm text-gray-700 shadow-sm">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-8 divide-y md:divide-y-0 md:divide-x divide-yellow-200">
+                            <!-- Kiri: Pemilik -->
+                            <div class="pb-4 md:pb-0">
+                                <h4 class="font-bold text-yellow-800 mb-3 uppercase text-xs tracking-widest border-b border-yellow-200 pb-2 flex items-center">
+                                    <i class="fa-solid fa-user mr-2"></i> Data Pemilik
+                                </h4>
+                                <div class="space-y-2">
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <span class="text-xs text-gray-500 font-medium">Nama Lengkap:</span>
+                                        <span id="dispOwnerName" class="col-span-2 font-bold text-gray-900">-</span>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <span class="text-xs text-gray-500 font-medium">Kontak (HP/Email):</span>
+                                        <span id="dispOwnerContact" class="col-span-2 font-mono text-xs text-gray-800 bg-white px-2 py-0.5 rounded border border-yellow-100 inline-block">-</span>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <span class="text-xs text-gray-500 font-medium">Alamat Rumah:</span>
+                                        <span id="dispOwnerAddress" class="col-span-2 italic text-gray-600">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Kanan: Hewan -->
+                            <div class="pt-4 md:pt-0 md:pl-8">
+                                <h4 class="font-bold text-yellow-800 mb-3 uppercase text-xs tracking-widest border-b border-yellow-200 pb-2 flex items-center">
+                                    <i class="fa-solid fa-paw mr-2"></i> Data Pasien
+                                </h4>
+                                <div class="grid grid-cols-2 gap-y-3 gap-x-6">
+                                    <div><span class="text-xs text-gray-500 block">Ras (Breed):</span> <span id="dispPetBreed" class="font-semibold text-gray-900">-</span></div>
+                                    <div><span class="text-xs text-gray-500 block">Warna / Ciri:</span> <span id="dispPetColor" class="font-semibold text-gray-900">-</span></div>
+                                    <div><span class="text-xs text-gray-500 block">Jenis Kelamin:</span> <span id="dispPetSex" class="font-semibold text-gray-900">-</span></div>
+                                    <div><span class="text-xs text-gray-500 block">Usia:</span> <span id="dispPetAge" class="font-semibold text-gray-900">-</span></div>
+                                    <div><span class="text-xs text-gray-500 block">Berat Badan:</span> <span id="dispPetWeight" class="font-bold text-cemara-700 text-lg">-</span></div>
+                                    <div class="col-span-2 border-t border-yellow-100 pt-2 mt-1">
+                                        <span class="text-xs text-gray-500 block mb-1">Riwayat Medis:</span> 
+                                        <span id="dispPetVaccine" class="text-xs bg-white px-2 py-1 rounded border border-yellow-100 text-gray-600 block">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Subjective -->
+                        <div class="lg:col-span-3 bg-white border rounded-xl p-4 shadow-sm">
+                            <h3 class="font-bold text-gray-700 mb-2 border-b pb-1">S (Subjective)</h3>
+                            <textarea id="soapS" class="w-full border rounded p-2 text-sm" rows="3" placeholder="Keluhan pemilik..."></textarea>
+                        </div>
+
+                        <!-- Objective (Smart Vitals) -->
+                        <div class="lg:col-span-3 bg-white border rounded-xl p-4 shadow-sm">
+                            <div class="flex justify-between mb-4 border-b pb-1">
+                                <h3 class="font-bold text-gray-700">O (Objective) - Vital Signs</h3>
+                                <span class="text-xs text-gray-500">Validasi Spesies: <span id="valSpecies" class="font-bold">-</span></span>
+                            </div>
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                <div>
+                                    <label class="text-xs font-bold block mb-1">Suhu (°C)</label>
+                                    <input type="number" step="0.1" id="inTemp" oninput="validate('temp')" class="w-full border p-2 rounded text-center font-bold">
+                                    <p id="msgTemp" class="text-[10px] h-3 mt-1"></p>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold block mb-1">HR (bpm)</label>
+                                    <input type="number" id="inHR" oninput="validate('hr')" class="w-full border p-2 rounded text-center font-bold">
+                                    <p id="msgHR" class="text-[10px] h-3 mt-1"></p>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold block mb-1">RR (rpm)</label>
+                                    <input type="number" id="inRR" oninput="validate('rr')" class="w-full border p-2 rounded text-center font-bold">
+                                    <p id="msgRR" class="text-[10px] h-3 mt-1"></p>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold block mb-1">CRT (detik)</label>
+                                    <input type="number" step="0.1" id="inCRT" oninput="validate('crt')" class="w-full border p-2 rounded text-center font-bold">
+                                    <p id="msgCRT" class="text-[10px] h-3 mt-1"></p>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold block mb-1">Mukosa</label>
+                                    <select id="inMucosa" onchange="validate('mucosa')" class="w-full border p-2 rounded text-sm bg-white">
+                                        <option value="Pink">Pink</option><option value="Pucat">Pucat</option><option value="Sianosis">Sianosis</option><option value="Ikterik">Ikterik</option><option value="Merah Bata">Merah Bata</option>
+                                    </select>
+                                    <p id="msgMucosa" class="text-[10px] h-3 mt-1"></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Assessment -->
+                        <div class="lg:col-span-1 bg-white border rounded-xl p-4 shadow-sm">
+                            <h3 class="font-bold text-gray-700 mb-2 border-b pb-1">A (Assessment)</h3>
+                            <label class="text-xs font-bold block mb-1">Diagnosa</label>
+                            <textarea id="soapA" class="w-full border rounded p-2 text-sm mb-2" rows="3"></textarea>
+                            <label class="text-xs font-bold block mb-1">Prognosa</label>
+                            <select id="soapProg" class="w-full border rounded p-2 text-sm mb-2"><option>Fausta</option><option>Dubius</option><option>Infausta</option></select>
+                        </div>
+
+                        <!-- Plan & Order -->
+                        <div class="lg:col-span-2 bg-white border rounded-xl p-4 shadow-sm flex flex-col">
+                            <h3 class="font-bold text-gray-700 mb-2 border-b pb-1">P (Plan & Treatment)</h3>
+                            <textarea id="soapP" class="w-full border rounded p-2 text-sm mb-4 flex-grow" placeholder="Instruksi medis..."></textarea>
+                            
+                            <!-- Kirim ke MAOR -->
+                            <div class="bg-blue-50 p-3 rounded border border-blue-100">
+                                <h4 class="text-xs font-bold text-blue-800 mb-2">Kirim Order ke MAOR (Flowsheet)</h4>
+                                <div class="flex gap-2 items-end">
+                                    <div class="flex-grow"><label class="text-[10px]">Obat/Tindakan</label><input type="text" id="orderDrug" class="w-full border rounded p-1 text-sm"></div>
+                                    <div class="w-20"><label class="text-[10px]">Dosis</label><input type="text" id="orderDose" class="w-full border rounded p-1 text-sm"></div>
+                                    <div class="w-20"><label class="text-[10px]">Rute</label><input type="text" id="orderRoute" class="w-full border rounded p-1 text-sm"></div>
+                                    <div class="w-24"><label class="text-[10px]">Jadwal</label><input type="text" id="orderFreq" class="w-full border rounded p-1 text-sm"></div>
+                                    <button onclick="sendOrderToMAOR()" class="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-700 h-[30px]">Kirim</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <button onclick="saveData()" class="bg-cemara-700 text-white px-6 py-3 rounded-xl font-bold shadow hover:bg-cemara-800"><i class="fa-solid fa-save mr-2"></i>Simpan Perubahan</button>
+                    </div>
+                </div>
+
+                <!-- TAB 2: MAOR (SPREADSHEET) -->
+                <div id="content-maor" class="hidden space-y-4 fade-in">
+                    <div class="bg-white border rounded-xl shadow-sm overflow-hidden">
+                        <div class="p-4 bg-gray-50 flex justify-between items-center border-b">
+                            <h3 class="font-bold text-gray-700"><i class="fa-solid fa-table mr-2"></i>Treatment Flowsheet</h3>
+                            <button onclick="addMaorRow()" class="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-green-700"><i class="fa-solid fa-plus mr-1"></i>Tambah Baris Manual</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left sheet-table border-collapse">
+                                <thead class="bg-gray-100 text-xs text-gray-600 uppercase">
+                                    <tr>
+                                        <th class="border w-32 p-2">Waktu</th>
+                                        <th class="border w-1/4 p-2">Nama Obat / Tindakan</th>
+                                        <th class="border w-20 p-2">Dosis</th>
+                                        <th class="border w-20 p-2">Rute</th>
+                                        <th class="border w-24 p-2">Pelaksana</th>
+                                        <th class="border w-32 p-2">Verifikasi Dokter</th>
+                                        <th class="border w-10 p-2"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="maorBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="p-2 bg-yellow-50 text-xs text-yellow-800 text-center">*Tekan tombol Verifikasi untuk mengunci baris (Tanda Tangan Digital).</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- LOGIC -->
+    <script>
+        // 1. DATABASE & STATE
+        let db = JSON.parse(localStorage.getItem('rsh_db_v4')) || []; // Updated key to v4
+        let currentUser = "";
+        let activePatientId = null;
+
+        const ranges = {
+            'Anjing': { t:[38.0,39.2], hr:[60,140], rr:[10,30] },
+            'Kucing': { t:[37.8,39.7], hr:[140,220], rr:[16,40] },
+            'Kelinci': { t:[38.0,40.0], hr:[150,330], rr:[30,60] },
+            'Marmut': { t:[37.2,39.5], hr:[230,320], rr:[40,100] },
+            'Burung': { t:[40.2,41.5], hr:[150,700], rr:[15,80] }
+        };
+
+        // 2. AUTH
+        function handleLogin(e) {
+            e.preventDefault();
+            currentUser = document.getElementById('loginName').value;
+            document.getElementById('displayUser').innerText = currentUser;
+            document.getElementById('modal-login').classList.add('hidden');
+            renderPatientTable();
+        }
+        function logout() { location.reload(); }
+
+        // 3. DASHBOARD & REGISTRATION
+        function toggleRegForm() { document.getElementById('form-reg-container').classList.toggle('hidden'); }
+        
+        function registerPatient(e) {
+            e.preventDefault();
+            const newPatient = {
+                id: Date.now(),
+                rm: `RM-${new Date().getFullYear().toString().substr(-2)}${(new Date().getMonth()+1).toString().padStart(2,'0')}-${Math.floor(1000+Math.random()*9000)}`,
+                status: "Rawat Inap",
+                owner: {
+                    name: document.getElementById('regOwnerName').value,
+                    phone: document.getElementById('regPhone').value,
+                    email: document.getElementById('regEmail').value,
+                    address: document.getElementById('regAddress').value
+                },
+                pet: {
+                    name: document.getElementById('regPetName').value,
+                    species: document.getElementById('regSpecies').value,
+                    breed: document.getElementById('regBreed').value,
+                    color: document.getElementById('regColor').value,
+                    sex: document.getElementById('regSex').value,
+                    age: document.getElementById('regAge').value,
+                    weight: document.getElementById('regWeight').value,
+                    vaccine: document.getElementById('regVaccine').value,
+                    deworm: document.getElementById('regDeworm').value
+                },
+                soap: { s:"", o:{t:"",hr:"",rr:"",crt:"",mm:"Pink"}, a:{dx:"", prog:"Fausta"}, p:"" },
+                maor: [] 
+            };
+            db.push(newPatient);
+            saveDataToLocal();
+            e.target.reset();
+            toggleRegForm();
+            openMedical(newPatient.id);
+        }
+
+        function renderPatientTable() {
+            const term = document.getElementById('searchPatient').value.toLowerCase();
+            const tbody = document.getElementById('patientTableBody');
+            tbody.innerHTML = "";
+            
+            db.filter(p => p.pet.name.toLowerCase().includes(term) || p.rm.toLowerCase().includes(term)).forEach(p => {
+                let badgeClass = 'bg-gray-100 text-gray-800';
+                if(p.status === 'Rawat Inap') badgeClass = 'bg-red-100 text-red-800';
+                if(p.status === 'Rawat Sehat') badgeClass = 'bg-green-100 text-green-800';
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 border-b">
+                        <td class="p-4 font-mono font-bold text-cemara-700">${p.rm}</td>
+                        <td class="p-4 font-bold">${p.pet.name} <span class="text-xs text-gray-500 font-normal">(${p.pet.species})</span></td>
+                        <td class="p-4">${p.owner.name}</td>
+                        <td class="p-4"><span class="${badgeClass} px-2 py-1 rounded text-xs font-bold">${p.status}</span></td>
+                        <td class="p-4 text-right"><button onclick="openMedical(${p.id})" class="text-blue-600 font-bold hover:underline">Buka</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        // 4. MEDICAL RECORD
+        function showDashboard() {
+            document.getElementById('view-dashboard').classList.remove('hidden');
+            document.getElementById('view-medical').classList.add('hidden');
+            renderPatientTable();
+        }
+
+        function openMedical(id) {
+            activePatientId = id;
+            const p = db.find(x => x.id === id);
+            
+            // Header Info
+            document.getElementById('headName').innerText = p.pet.name;
+            document.getElementById('headSpecies').innerText = p.pet.species;
+            document.getElementById('headRM').innerText = p.rm;
+            document.getElementById('headOwner').innerText = p.owner.name;
+            document.getElementById('patientStatusSelect').value = p.status;
+            document.getElementById('valSpecies').innerText = p.pet.species;
+
+            // POPULATE FULL IDENTITY CARD
+            document.getElementById('dispOwnerName').innerText = p.owner.name;
+            document.getElementById('dispOwnerContact').innerText = `${p.owner.phone} / ${p.owner.email}`;
+            document.getElementById('dispOwnerAddress').innerText = p.owner.address;
+            
+            document.getElementById('dispPetBreed').innerText = p.pet.breed;
+            document.getElementById('dispPetColor').innerText = p.pet.color;
+            document.getElementById('dispPetSex').innerText = p.pet.sex;
+            document.getElementById('dispPetAge').innerText = p.pet.age;
+            document.getElementById('dispPetWeight').innerText = p.pet.weight + " kg";
+            document.getElementById('dispPetVaccine').innerText = p.pet.vaccine + " | Obat Cacing: " + p.pet.deworm;
+
+            // Load SOAP
+            document.getElementById('soapS').value = p.soap.s;
+            document.getElementById('inTemp').value = p.soap.o.t;
+            document.getElementById('inHR').value = p.soap.o.hr;
+            document.getElementById('inRR').value = p.soap.o.rr;
+            document.getElementById('inCRT').value = p.soap.o.crt;
+            document.getElementById('inMucosa').value = p.soap.o.mm;
+            document.getElementById('soapA').value = p.soap.a.dx;
+            document.getElementById('soapProg').value = p.soap.a.prog;
+            document.getElementById('soapP').value = p.soap.p;
+
+            // Validate Vitals
+            ['Temp','HR','RR','CRT'].forEach(k => validate(k.toLowerCase()));
+
+            renderMaor();
+            
+            document.getElementById('view-dashboard').classList.add('hidden');
+            document.getElementById('view-medical').classList.remove('hidden');
+            switchTab('pomr');
+        }
+
+        function saveData() {
+            if(!activePatientId) return;
+            const p = db.find(x => x.id === activePatientId);
+            
+            // Save SOAP
+            p.soap.s = document.getElementById('soapS').value;
+            p.soap.o.t = document.getElementById('inTemp').value;
+            p.soap.o.hr = document.getElementById('inHR').value;
+            p.soap.o.rr = document.getElementById('inRR').value;
+            p.soap.o.crt = document.getElementById('inCRT').value;
+            p.soap.o.mm = document.getElementById('inMucosa').value;
+            p.soap.a.dx = document.getElementById('soapA').value;
+            p.soap.a.prog = document.getElementById('soapProg').value;
+            p.soap.p = document.getElementById('soapP').value;
+
+            saveDataToLocal();
+            alert("Data Tersimpan!");
+        }
+
+        function saveDataToLocal() {
+            localStorage.setItem('rsh_db_v4', JSON.stringify(db));
+        }
+
+        function updatePatientStatus() {
+            if(!activePatientId) return;
+            const p = db.find(x => x.id === activePatientId);
+            p.status = document.getElementById('patientStatusSelect').value;
+            saveDataToLocal();
+        }
+
+        function validate(type) {
+            const p = db.find(x => x.id === activePatientId);
+            if(!p) return;
+            const ref = ranges[p.pet.species] || ranges['Kucing'];
+            const el = document.getElementById(type === 'temp' ? 'inTemp' : type === 'hr' ? 'inHR' : type === 'rr' ? 'inRR' : type === 'crt' ? 'inCRT' : 'inMucosa');
+            const msg = document.getElementById(type === 'temp' ? 'msgTemp' : type === 'hr' ? 'msgHR' : type === 'rr' ? 'msgRR' : type === 'crt' ? 'msgCRT' : 'msgMucosa');
+            const val = el.value;
+
+            el.className = "w-full border p-2 rounded text-center font-bold"; 
+            msg.innerHTML = "";
+
+            if(!val) return;
+
+            let bad = false;
+            let rangeTxt = "";
+
+            if(type === 'crt') {
+                if(val > 2) { bad=true; rangeTxt="< 2 detik"; }
+            } else if(type === 'mucosa') {
+                if(val !== 'Pink') { bad=true; rangeTxt="Harus Pink"; }
+            } else {
+                let r = type==='temp' ? ref.t : type==='hr' ? ref.hr : ref.rr;
+                if(val < r[0] || val > r[1]) { bad=true; rangeTxt=`${r[0]}-${r[1]}`; }
+            }
+
+            if(bad) {
+                el.classList.add('border-red-500', 'bg-red-50', 'text-red-700');
+                msg.innerHTML = `<span class="text-red-500 font-bold">⚠ Normal: ${rangeTxt}</span>`;
+            } else {
+                el.classList.add('border-green-500', 'bg-green-50', 'text-green-700');
+            }
+        }
+
+        // 5. MAOR LOGIC
+        function sendOrderToMAOR() {
+            const drug = document.getElementById('orderDrug').value;
+            const dose = document.getElementById('orderDose').value;
+            const route = document.getElementById('orderRoute').value;
+            const freq = document.getElementById('orderFreq').value; 
+
+            if(!drug) return alert("Isi nama obat!");
+
+            const p = db.find(x => x.id === activePatientId);
+            const now = new Date();
+            const timeStr = now.toTimeString().substring(0,5);
+            
+            p.maor.push({
+                time: timeStr,
+                drug: drug,
+                dose: dose,
+                route: route,
+                officer: "",
+                verifiedBy: null
+            });
+            
+            // Clear Inputs
+            document.getElementById('orderDrug').value = "";
+            document.getElementById('orderDose').value = "";
+            document.getElementById('orderRoute').value = "";
+            document.getElementById('orderFreq').value = "";
+            
+            saveDataToLocal(); 
+            alert("Masuk ke MAOR.");
+        }
+
+        function addMaorRow() {
+            const p = db.find(x => x.id === activePatientId);
+            const now = new Date();
+            p.maor.push({
+                time: now.toTimeString().substring(0,5),
+                drug: "", dose: "", route: "", officer: "", verifiedBy: null
+            });
+            saveDataToLocal();
+            renderMaor();
+        }
+
+        function renderMaor() {
+            const p = db.find(x => x.id === activePatientId);
+            const tbody = document.getElementById('maorBody');
+            tbody.innerHTML = "";
+
+            p.maor.forEach((row, idx) => {
+                const locked = row.verifiedBy !== null;
+                const roClass = locked ? "sheet-readonly" : "sheet-input";
+                
+                let actionHtml = locked 
+                    ? `<div class="bg-green-100 text-green-800 text-xs p-2 font-bold text-center rounded"><i class="fa-solid fa-check mr-1"></i>${row.verifiedBy}</div>`
+                    : `<button onclick="verifyRow(${idx})" class="w-full bg-blue-600 text-white text-xs py-1 px-2 rounded hover:bg-blue-700">Verifikasi</button>`;
+
+                let delBtn = locked ? "" : `<button onclick="delRow(${idx})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button>`;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><input type="time" class="${roClass}" value="${row.time}" onchange="updRow(${idx},'time',this.value)" ${locked?'disabled':''}></td>
+                        <td><input type="text" class="${roClass}" value="${row.drug}" onchange="updRow(${idx},'drug',this.value)" ${locked?'disabled':''} placeholder="Obat..."></td>
+                        <td><input type="text" class="${roClass}" value="${row.dose}" onchange="updRow(${idx},'dose',this.value)" ${locked?'disabled':''} placeholder="Dosis"></td>
+                        <td><input type="text" class="${roClass}" value="${row.route}" onchange="updRow(${idx},'route',this.value)" ${locked?'disabled':''} placeholder="Rute"></td>
+                        <td><input type="text" class="${roClass}" value="${row.officer}" onchange="updRow(${idx},'officer',this.value)" ${locked?'disabled':''} placeholder="Pelaksana"></td>
+                        <td class="p-1 align-middle">${actionHtml}</td>
+                        <td class="p-1 align-middle text-center">${delBtn}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function updRow(idx, field, val) {
+            const p = db.find(x => x.id === activePatientId);
+            p.maor[idx][field] = val;
+            saveDataToLocal(); 
+        }
+
+        function verifyRow(idx) {
+            if(!currentUser) return alert("Login dulu!");
+            if(confirm("Verifikasi baris ini? Data akan terkunci.")) {
+                const p = db.find(x => x.id === activePatientId);
+                p.maor[idx].verifiedBy = currentUser;
+                saveDataToLocal();
+                renderMaor();
+            }
+        }
+
+        function delRow(idx) {
+            if(confirm("Hapus?")) {
+                const p = db.find(x => x.id === activePatientId);
+                p.maor.splice(idx, 1);
+                saveDataToLocal();
+                renderMaor();
+            }
+        }
+
+        function switchTab(t) {
+            document.getElementById('content-pomr').classList.toggle('hidden', t !== 'pomr');
+            document.getElementById('content-maor').classList.toggle('hidden', t !== 'maor');
+            
+            // Styles
+            const tabPomr = document.getElementById('tab-pomr');
+            const tabMaor = document.getElementById('tab-maor');
+            
+            if(t === 'pomr') {
+                tabPomr.className = "flex-1 py-2 text-sm font-bold border-b-2 border-cemara-600 text-cemara-700";
+                tabMaor.className = "flex-1 py-2 text-sm font-medium text-gray-500 hover:text-cemara-600";
+            } else {
+                tabMaor.className = "flex-1 py-2 text-sm font-bold border-b-2 border-cemara-600 text-cemara-700";
+                tabPomr.className = "flex-1 py-2 text-sm font-medium text-gray-500 hover:text-cemara-600";
+                renderMaor();
+            }
+        }
+
+    </script>
+</body>
+</html>
